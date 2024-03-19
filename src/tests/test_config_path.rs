@@ -1,4 +1,5 @@
 use nu_path::canonicalize_with;
+use nu_test_support::fs::Stub;
 use nu_test_support::nu;
 use nu_test_support::playground::{Executable, Playground};
 use pretty_assertions::assert_eq;
@@ -236,6 +237,35 @@ fn test_xdg_config_bad() {
         assert_eq!(
             actual.out,
             adjust_canonicalization(expected.canonicalize().unwrap_or(expected))
+        );
+    });
+}
+
+#[test]
+fn test_config_dir_cached() {
+    Playground::setup("config_dir_cached", |_, playground| {
+        // Set XDG_CONFIG_HOME to a different value in env.nu and make sure the original
+        // config dir is kept
+        let orig_config_dir = nu_path::config_dir().expect("Should have a config dir");
+
+        playground.with_files(vec![Stub::FileWithContent(
+            "env.nu",
+            &format!(
+                "$env.XDG_CONFIG_HOME = '{}'",
+                playground.cwd().join("config").display(),
+            ),
+        )]);
+
+        let actual = nu!(
+            cwd: &playground.cwd(),
+            format!(
+                r#"nu --env-config {} -c 'nu -c "$nu.default-config-dir"'"#,
+                playground.cwd().join("env.nu").display()
+            )
+        );
+        assert_eq!(
+            actual.out,
+            orig_config_dir.join("nushell").display().to_string()
         );
     });
 }
