@@ -3,12 +3,14 @@ use super::EnvironmentVariable;
 use std::ffi::OsString;
 use std::fmt;
 use std::fmt::Write;
+use std::path::PathBuf;
 
 #[derive(Default, Debug)]
 pub struct Director {
     pub cwd: Option<OsString>,
     pub environment_vars: Vec<EnvironmentVariable>,
-    pub config: Option<OsString>,
+    pub config: Option<PathBuf>,
+    pub env_config: Option<PathBuf>,
     pub pipeline: Option<Vec<String>>,
     pub executable: Option<NuProcess>,
 }
@@ -62,10 +64,10 @@ impl Director {
 
         process.arg("--no-history");
         if let Some(config_file) = self.config.as_ref() {
-            process.args(&[
-                "--config",
-                config_file.to_str().expect("failed to convert."),
-            ]);
+            process.arg("--config").arg(config_file.as_os_str());
+        }
+        if let Some(env_config_file) = self.env_config.as_ref() {
+            process.arg("--env-config").arg(env_config_file.as_os_str());
         }
         process.args(&["--log-level", "info"]);
 

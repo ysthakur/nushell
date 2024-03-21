@@ -248,6 +248,7 @@ fn test_config_dir_cached() {
         // config dir is kept
         let orig_config_dir = nu_path::config_dir().expect("Should have a config dir");
 
+        playground.with_env_config(playground.cwd().join("env.nu"));
         playground.with_files(vec![Stub::FileWithContent(
             "env.nu",
             &format!(
@@ -256,15 +257,16 @@ fn test_config_dir_cached() {
             ),
         )]);
 
-        let actual = nu!(
-            cwd: &playground.cwd(),
-            format!(
-                r#"nu --env-config {} -c 'nu -c "$nu.default-config-dir"'"#,
-                playground.cwd().join("env.nu").display()
-            )
-        );
+        // let actual = nu!(
+        //     cwd: &playground.cwd(),
+        //     format!(
+        //         r#"nu --env-config {} -c 'nu -c "$nu.default-config-dir"'"#,
+        //         playground.cwd().join("env.nu").display()
+        //     )
+        // );
+        let actual = run(playground, "[$nu.history-path, $nu.default-config-dir, $nu.plugin-path, $nu.env-path, $env.XDG_CONFIG_HOME] | to nuon");
         assert_eq!(
-            actual.out,
+            actual,
             orig_config_dir.join("nushell").display().to_string()
         );
     });

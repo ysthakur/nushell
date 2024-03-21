@@ -26,6 +26,7 @@ pub struct Playground<'a> {
     tests: String,
     cwd: PathBuf,
     config: Option<PathBuf>,
+    env_config: Option<PathBuf>,
     environment_vars: Vec<EnvironmentVariable>,
     dirs: &'a Dirs,
 }
@@ -94,6 +95,7 @@ impl<'a> Playground<'a> {
             tests: topic.to_string(),
             cwd: nuplay_dir,
             config: None,
+            env_config: None,
             environment_vars: Vec::default(),
             dirs: &Dirs::default(),
         };
@@ -135,6 +137,11 @@ impl<'a> Playground<'a> {
         self
     }
 
+    pub fn with_env_config(&mut self, source_file: impl AsRef<Path>) -> &mut Self {
+        self.env_config = Some(source_file.as_ref().to_path_buf());
+        self
+    }
+
     pub fn with_env(&mut self, name: &str, value: &str) -> &mut Self {
         self.environment_vars
             .push(EnvironmentVariable::new(name, value));
@@ -147,10 +154,17 @@ impl<'a> Playground<'a> {
             .map(|cfg| cfg.to_str().expect("could not convert path."))
     }
 
+    pub fn get_env_config(&self) -> Option<&str> {
+        self.env_config
+            .as_ref()
+            .map(|cfg| cfg.to_str().expect("could not convert path."))
+    }
+
     pub fn build(&mut self) -> Director {
         Director {
             cwd: Some(self.dirs.test().into()),
-            config: self.config.clone().map(|cfg| cfg.into()),
+            config: self.config.clone(),
+            env_config: self.env_config.clone(),
             environment_vars: self.environment_vars.clone(),
             ..Default::default()
         }
