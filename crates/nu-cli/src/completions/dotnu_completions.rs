@@ -1,4 +1,4 @@
-use crate::completions::{file_path_completion, Completer, CompletionOptions};
+use crate::completions::{Completer, CompletionOptions};
 use nu_protocol::{
     engine::{Stack, StateWorkingSet},
     Span,
@@ -6,7 +6,10 @@ use nu_protocol::{
 use reedline::Suggestion;
 use std::path::{is_separator, Path, MAIN_SEPARATOR as SEP, MAIN_SEPARATOR_STR};
 
-use super::{completion_common::sort_suggestions, SemanticSuggestion, SortBy};
+use super::{
+    completion_common::{complete_item, sort_suggestions},
+    SemanticSuggestion, SortBy,
+};
 
 #[derive(Clone, Default)]
 pub struct DotNuCompletion {}
@@ -87,49 +90,45 @@ impl Completer for DotNuCompletion {
 
         // Fetch the files filtering the ones that ends with .nu
         // and transform them into suggestions
-        let output: Vec<SemanticSuggestion> = search_dirs
-            .into_iter()
-            .flat_map(|search_dir| {
-                let completions = file_path_completion(
-                    span,
-                    &partial,
-                    &search_dir,
-                    options,
-                    working_set.permanent_state,
-                    stack,
-                );
-                completions
-                    .into_iter()
-                    .filter(move |it| {
-                        // Different base dir, so we list the .nu files or folders
-                        if !is_current_folder {
-                            it.1.ends_with(".nu") || it.1.ends_with(SEP)
-                        } else {
-                            // Lib dirs, so we filter only the .nu files or directory modules
-                            if it.1.ends_with(SEP) {
-                                Path::new(&search_dir).join(&it.1).join("mod.nu").exists()
-                            } else {
-                                it.1.ends_with(".nu")
-                            }
-                        }
-                    })
-                    .map(move |x| SemanticSuggestion {
-                        suggestion: Suggestion {
-                            value: x.1,
-                            description: None,
-                            style: x.2,
-                            extra: None,
-                            span: reedline::Span {
-                                start: x.0.start - offset,
-                                end: x.0.end - offset,
-                            },
-                            append_whitespace: true,
-                        },
-                        // TODO????
-                        kind: None,
-                    })
-            })
-            .collect();
+        let output: Vec<SemanticSuggestion> = complete_item(
+            false,
+            span,
+            &partial,
+            &search_dirs,
+            options,
+            working_set.permanent_state,
+            stack,
+        )
+        .into_iter()
+        .filter(move |(_, search_dir, value, _)| {
+            // Different base dir, so we list the .nu files or folders
+            if !is_current_folder {
+                value.ends_with(".nu") || value.ends_with(SEP)
+            } else {
+                // Lib dirs, so we filter only the .nu files or directory modules
+                if value.ends_with(SEP) {
+                    Path::new(&search_dir).join(value).join("mod.nu").exists()
+                } else {
+                    value.ends_with(".nu")
+                }
+            }
+        })
+        .map(move |(span, _, value, style)| SemanticSuggestion {
+            suggestion: Suggestion {
+                value,
+                description: None,
+                style,
+                extra: None,
+                span: reedline::Span {
+                    start: span.start - offset,
+                    end: span.end - offset,
+                },
+                append_whitespace: true,
+            },
+            // TODO????
+            kind: None,
+        })
+        .collect();
 
         sort_suggestions(&prefix_str, output, SortBy::Ascending)
     }

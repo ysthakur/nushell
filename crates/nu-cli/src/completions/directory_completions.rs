@@ -8,7 +8,7 @@ use nu_protocol::{
     Span,
 };
 use reedline::Suggestion;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::SemanticSuggestion;
 
@@ -45,15 +45,15 @@ impl Completer for DirectoryCompletion {
             stack,
         )
         .into_iter()
-        .map(move |x| SemanticSuggestion {
+        .map(move |(span, _, value, style)| SemanticSuggestion {
             suggestion: Suggestion {
-                value: x.1,
+                value,
                 description: None,
-                style: x.2,
+                style,
                 extra: None,
                 span: reedline::Span {
-                    start: x.0.start - offset,
-                    end: x.0.end - offset,
+                    start: span.start - offset,
+                    end: span.end - offset,
                 },
                 append_whitespace: false,
             },
@@ -87,13 +87,13 @@ impl Completer for DirectoryCompletion {
     }
 }
 
-pub fn directory_completion(
+fn directory_completion(
     span: nu_protocol::Span,
     partial: &str,
     cwd: &str,
     options: &CompletionOptions,
     engine_state: &EngineState,
     stack: &Stack,
-) -> Vec<(nu_protocol::Span, String, Option<Style>)> {
-    complete_item(true, span, partial, cwd, options, engine_state, stack)
+) -> Vec<(nu_protocol::Span, PathBuf, String, Option<Style>)> {
+    complete_item(true, span, partial, &[cwd], options, engine_state, stack)
 }
