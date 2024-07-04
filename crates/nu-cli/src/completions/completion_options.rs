@@ -83,7 +83,6 @@ pub struct NuMatcher<T> {
     needle: String,
     case_sensitive: bool,
     positional: bool,
-    sort: bool,
     state: State<T>,
 }
 
@@ -93,7 +92,7 @@ enum State<T> {
 }
 
 impl<T> NuMatcher<T> {
-    pub fn new(needle: impl AsRef<str>, options: &CompletionOptions, sort: bool) -> NuMatcher<T> {
+    pub fn new(needle: impl AsRef<str>, options: &CompletionOptions) -> NuMatcher<T> {
         let needle = trim_quotes_str(needle.as_ref()).to_string();
 
         match &options.match_algorithm {
@@ -107,7 +106,6 @@ impl<T> NuMatcher<T> {
                     needle,
                     case_sensitive: options.case_sensitive,
                     positional: options.positional,
-                    sort,
                     state: State::Prefix { items: Vec::new() },
                 }
             }
@@ -115,7 +113,6 @@ impl<T> NuMatcher<T> {
                 needle,
                 case_sensitive: options.case_sensitive,
                 positional: options.positional,
-                sort,
                 state: State::Fuzzy { items: Vec::new() },
             },
         }
@@ -135,16 +132,12 @@ impl<T> NuMatcher<T> {
                     return false;
                 }
 
-                if self.sort {
-                    let insert_ind =
-                        match items.binary_search_by(|(other, _)| other.as_str().cmp(haystack)) {
-                            Ok(i) => i,
-                            Err(i) => i,
-                        };
-                    items.insert(insert_ind, (haystack.to_string(), item));
-                } else {
-                    items.push((haystack.to_string(), item))
-                }
+                let insert_ind =
+                    match items.binary_search_by(|(other, _)| other.as_str().cmp(haystack)) {
+                        Ok(i) => i,
+                        Err(i) => i,
+                    };
+                items.insert(insert_ind, (haystack.to_string(), item));
 
                 true
             }
@@ -159,16 +152,12 @@ impl<T> NuMatcher<T> {
                     return false;
                 };
 
-                if self.sort {
-                    let insert_ind =
-                        match items.binary_search_by(|(other_score, _)| other_score.cmp(&score)) {
-                            Ok(i) => i,
-                            Err(i) => i,
-                        };
-                    items.insert(insert_ind, (score, item));
-                } else {
-                    items.push((score, item))
-                }
+                let insert_ind =
+                    match items.binary_search_by(|(other_score, _)| other_score.cmp(&score)) {
+                        Ok(i) => i,
+                        Err(i) => i,
+                    };
+                items.insert(insert_ind, (score, item));
 
                 true
             }
