@@ -1,6 +1,4 @@
-use crate::completions::{
-    completion_common::sort_suggestions, Completer, CompletionOptions, SortBy,
-};
+use crate::completions::{completion_options::NuMatcher, Completer, CompletionOptions};
 use nu_protocol::{
     ast::{Expr, Expression},
     engine::{Stack, StateWorkingSet},
@@ -37,7 +35,7 @@ impl Completer for FlagCompletion {
             let decl = working_set.get_decl(call.decl_id);
             let sig = decl.signature();
 
-            let mut output = vec![];
+            let mut matcher = NuMatcher::new(String::from_utf8_lossy(&prefix), options, true);
 
             for named in &sig.named {
                 let flag_desc = &named.desc;
@@ -46,37 +44,10 @@ impl Completer for FlagCompletion {
                     short.encode_utf8(&mut named);
                     named.insert(0, b'-');
 
-                    if options.match_algorithm.matches_u8(&named, &prefix) {
-                        output.push(SemanticSuggestion {
-                            suggestion: Suggestion {
-                                value: String::from_utf8_lossy(&named).to_string(),
-                                description: Some(flag_desc.to_string()),
-                                style: None,
-                                extra: None,
-                                span: reedline::Span {
-                                    start: span.start - offset,
-                                    end: span.end - offset,
-                                },
-                                append_whitespace: true,
-                            },
-                            // TODO????
-                            kind: None,
-                        });
-                    }
-                }
-
-                if named.long.is_empty() {
-                    continue;
-                }
-
-                let mut named = named.long.as_bytes().to_vec();
-                named.insert(0, b'-');
-                named.insert(0, b'-');
-
-                if options.match_algorithm.matches_u8(&named, &prefix) {
-                    output.push(SemanticSuggestion {
+                    let named = String::from_utf8_lossy(&named);
+                    matcher.add_semantic_suggestion(SemanticSuggestion {
                         suggestion: Suggestion {
-                            value: String::from_utf8_lossy(&named).to_string(),
+                            value: named.to_string(),
                             description: Some(flag_desc.to_string()),
                             style: None,
                             extra: None,
@@ -90,9 +61,34 @@ impl Completer for FlagCompletion {
                         kind: None,
                     });
                 }
+
+                if named.long.is_empty() {
+                    continue;
+                }
+
+                let mut named = named.long.as_bytes().to_vec();
+                named.insert(0, b'-');
+                named.insert(0, b'-');
+
+                let named = String::from_utf8_lossy(&named).to_string();
+                matcher.add_semantic_suggestion(SemanticSuggestion {
+                    suggestion: Suggestion {
+                        value: named,
+                        description: Some(flag_desc.to_string()),
+                        style: None,
+                        extra: None,
+                        span: reedline::Span {
+                            start: span.start - offset,
+                            end: span.end - offset,
+                        },
+                        append_whitespace: true,
+                    },
+                    // TODO????
+                    kind: None,
+                });
             }
 
-            return sort_suggestions(&String::from_utf8_lossy(&prefix), output, SortBy::Ascending);
+            return matcher.results();
         }
 
         vec![]

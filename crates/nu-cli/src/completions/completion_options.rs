@@ -4,6 +4,8 @@ use nu_protocol::CompletionAlgorithm;
 use nu_utils::IgnoreCaseExt;
 use std::fmt::Display;
 
+use crate::SemanticSuggestion;
+
 #[derive(Copy, Clone)]
 pub enum SortBy {
     LevenshteinDistance,
@@ -87,7 +89,7 @@ pub struct NuMatcher<T> {
 
 enum State<T> {
     Prefix { items: Vec<(String, T)> },
-    Fuzzy { items: Vec<(i64, String, T)> },
+    Fuzzy { items: Vec<(i64, T)> },
 }
 
 impl<T> NuMatcher<T> {
@@ -119,7 +121,7 @@ impl<T> NuMatcher<T> {
         }
     }
 
-    fn add(&mut self, haystack: impl AsRef<str>, item: T) -> bool {
+    pub fn add(&mut self, haystack: impl AsRef<str>, item: T) -> bool {
         let haystack = trim_quotes_str(haystack.as_ref());
 
         match &mut self.state {
@@ -158,15 +160,14 @@ impl<T> NuMatcher<T> {
                 };
 
                 if self.sort {
-                    let insert_ind = match items
-                        .binary_search_by(|(other_score, _, _)| other_score.cmp(&score))
-                    {
-                        Ok(i) => i,
-                        Err(i) => i,
-                    };
-                    items.insert(insert_ind, (score, haystack.to_string(), item));
+                    let insert_ind =
+                        match items.binary_search_by(|(other_score, _)| other_score.cmp(&score)) {
+                            Ok(i) => i,
+                            Err(i) => i,
+                        };
+                    items.insert(insert_ind, (score, item));
                 } else {
-                    items.push((score, haystack.to_string(), item))
+                    items.push((score, item))
                 }
 
                 true
@@ -174,11 +175,17 @@ impl<T> NuMatcher<T> {
         }
     }
 
-    fn results(self) -> Vec<T> {
+    pub fn results(self) -> Vec<T> {
         match self.state {
             State::Prefix { items } => items.into_iter().map(|(_, item)| item).collect(),
-            State::Fuzzy { items } => items.into_iter().map(|(_, _, item)| item).collect(),
+            State::Fuzzy { items } => items.into_iter().map(|(_, item)| item).collect(),
         }
+    }
+}
+
+impl NuMatcher<SemanticSuggestion> {
+    pub fn add_semantic_suggestion(&mut self, suggestion: SemanticSuggestion) -> bool {
+        self.add(suggestion.suggestion.value.clone(), suggestion)
     }
 }
 
