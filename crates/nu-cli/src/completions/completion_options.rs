@@ -79,7 +79,8 @@ impl TryFrom<String> for MatchAlgorithm {
 
 pub struct NuMatcher<T> {
     needle: String,
-    options: CompletionOptions,
+    case_sensitive: bool,
+    positional: bool,
     sort: bool,
     state: State<T>,
 }
@@ -90,7 +91,7 @@ enum State<T> {
 }
 
 impl<T> NuMatcher<T> {
-    pub fn new(needle: impl AsRef<str>, options: CompletionOptions, sort: bool) -> NuMatcher<T> {
+    pub fn new(needle: impl AsRef<str>, options: &CompletionOptions, sort: bool) -> NuMatcher<T> {
         let needle = trim_quotes_str(needle.as_ref()).to_string();
 
         match &options.match_algorithm {
@@ -102,14 +103,16 @@ impl<T> NuMatcher<T> {
                 };
                 NuMatcher {
                     needle,
-                    options,
+                    case_sensitive: options.case_sensitive,
+                    positional: options.positional,
                     sort,
                     state: State::Prefix { items: Vec::new() },
                 }
             }
             MatchAlgorithm::Fuzzy => NuMatcher {
                 needle,
-                options,
+                case_sensitive: options.case_sensitive,
+                positional: options.positional,
                 sort,
                 state: State::Fuzzy { items: Vec::new() },
             },
@@ -121,7 +124,7 @@ impl<T> NuMatcher<T> {
 
         match &mut self.state {
             State::Prefix { items } => {
-                let matches = if self.options.positional {
+                let matches = if self.positional {
                     haystack.starts_with(&self.needle)
                 } else {
                     haystack.contains(&self.needle)
@@ -145,7 +148,7 @@ impl<T> NuMatcher<T> {
             }
             State::Fuzzy { items } => {
                 let mut matcher = SkimMatcherV2::default();
-                if self.options.case_sensitive {
+                if self.case_sensitive {
                     matcher = matcher.respect_case();
                 } else {
                     matcher = matcher.ignore_case();
