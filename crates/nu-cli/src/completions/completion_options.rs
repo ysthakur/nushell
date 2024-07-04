@@ -2,7 +2,7 @@ use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use nu_parser::trim_quotes_str;
 use nu_protocol::CompletionAlgorithm;
 use nu_utils::IgnoreCaseExt;
-use std::fmt::Display;
+use std::{borrow::Cow, fmt::Display};
 
 use crate::SemanticSuggestion;
 
@@ -123,17 +123,23 @@ impl<T> NuMatcher<T> {
 
         match &mut self.state {
             State::Prefix { items } => {
+                let haystack = if self.case_sensitive {
+                    Cow::Borrowed(haystack)
+                } else {
+                    Cow::Owned(haystack.to_folded_case())
+                };
                 let matches = if self.positional {
                     haystack.starts_with(&self.needle)
                 } else {
                     haystack.contains(&self.needle)
                 };
                 if !matches {
+                    println!("no match :( (prefix) {} {}", haystack, self.needle);
                     return false;
                 }
 
                 let insert_ind =
-                    match items.binary_search_by(|(other, _)| other.as_str().cmp(haystack)) {
+                    match items.binary_search_by(|(other, _)| other.as_str().cmp(&haystack)) {
                         Ok(i) => i,
                         Err(i) => i,
                     };
@@ -149,6 +155,7 @@ impl<T> NuMatcher<T> {
                     matcher = matcher.ignore_case();
                 }
                 let Some(score) = matcher.fuzzy_match(haystack, &self.needle) else {
+                    println!("no match :( (fuzzy) {} {}", haystack, self.needle);
                     return false;
                 };
 

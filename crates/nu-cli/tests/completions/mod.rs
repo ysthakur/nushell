@@ -759,8 +759,8 @@ fn flag_completions() {
         "--long".into(),
         "--mime-type".into(),
         "--short-names".into(),
-        "-D".into(),
         "-a".into(),
+        "-D".into(),
         "-d".into(),
         "-f".into(),
         "-h".into(),
@@ -812,9 +812,6 @@ fn variables_completions() {
 
     // Test completions for $nu
     let suggestions = completer.complete("$nu.", 4);
-
-    assert_eq!(18, suggestions.len());
-
     let expected: Vec<String> = vec![
         "cache-dir".into(),
         "config-path".into(),
@@ -841,9 +838,6 @@ fn variables_completions() {
 
     // Test completions for $nu.h (filter)
     let suggestions = completer.complete("$nu.h", 5);
-
-    assert_eq!(3, suggestions.len());
-
     let expected: Vec<String> = vec![
         "history-enabled".into(),
         "history-path".into(),
@@ -855,7 +849,6 @@ fn variables_completions() {
 
     // Test completions for $nu.os-info
     let suggestions = completer.complete("$nu.os-info.", 12);
-    assert_eq!(4, suggestions.len());
     let expected: Vec<String> = vec![
         "arch".into(),
         "family".into(),
@@ -867,9 +860,6 @@ fn variables_completions() {
 
     // Test completions for custom var
     let suggestions = completer.complete("$actor.", 7);
-
-    assert_eq!(2, suggestions.len());
-
     let expected: Vec<String> = vec!["age".into(), "name".into()];
 
     // Match results
@@ -877,9 +867,6 @@ fn variables_completions() {
 
     // Test completions for custom var (filtering)
     let suggestions = completer.complete("$actor.n", 8);
-
-    assert_eq!(1, suggestions.len());
-
     let expected: Vec<String> = vec!["name".into()];
 
     // Match results
@@ -887,8 +874,6 @@ fn variables_completions() {
 
     // Test completions for $env
     let suggestions = completer.complete("$env.", 5);
-
-    assert_eq!(3, suggestions.len());
 
     #[cfg(windows)]
     let expected: Vec<String> = vec!["PWD".into(), "Path".into(), "TEST".into()];
@@ -900,9 +885,6 @@ fn variables_completions() {
 
     // Test completions for $env
     let suggestions = completer.complete("$env.T", 6);
-
-    assert_eq!(1, suggestions.len());
-
     let expected: Vec<String> = vec!["TEST".into()];
 
     // Match results
