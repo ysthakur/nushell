@@ -2,13 +2,12 @@ use crate::completions::{
     completion_common::{adjust_if_intermediate, complete_item, AdjustView},
     Completer, CompletionOptions,
 };
-use nu_ansi_term::Style;
 use nu_protocol::{
-    engine::{EngineState, Stack, StateWorkingSet},
+    engine::{Stack, StateWorkingSet},
     Span,
 };
 use reedline::Suggestion;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::SemanticSuggestion;
 
@@ -36,10 +35,11 @@ impl Completer for DirectoryCompletion {
 
         // Filter only the folders
         #[allow(deprecated)]
-        let items: Vec<_> = directory_completion(
+        let items: Vec<_> = complete_item(
+            true,
             span,
             &prefix,
-            &working_set.permanent_state.current_work_dir(),
+            &[&working_set.permanent_state.current_work_dir()],
             options,
             working_set.permanent_state,
             stack,
@@ -85,15 +85,4 @@ impl Completer for DirectoryCompletion {
 
         non_hidden
     }
-}
-
-fn directory_completion(
-    span: nu_protocol::Span,
-    partial: &str,
-    cwd: &str,
-    options: &CompletionOptions,
-    engine_state: &EngineState,
-    stack: &Stack,
-) -> Vec<(nu_protocol::Span, PathBuf, String, Option<Style>)> {
-    complete_item(true, span, partial, &[cwd], options, engine_state, stack)
 }
