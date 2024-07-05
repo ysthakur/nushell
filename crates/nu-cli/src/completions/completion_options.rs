@@ -52,7 +52,7 @@ pub struct NuMatcher<T> {
 
 enum State<T> {
     Prefix { items: Vec<(String, T)> },
-    Fuzzy { items: Vec<(i64, T)> },
+    Fuzzy { items: Vec<(i64, String, T)> },
 }
 
 impl<T> NuMatcher<T> {
@@ -115,7 +115,7 @@ impl<T> NuMatcher<T> {
                     return false;
                 };
 
-                items.push((score, item));
+                items.push((score, haystack.to_string(), item));
                 true
             }
         }
@@ -128,8 +128,8 @@ impl<T> NuMatcher<T> {
                 items.into_iter().map(|(_, item)| item).collect()
             }
             State::Fuzzy { mut items } => {
-                items.sort_by_key(|(score, _)| -*score);
-                items.into_iter().map(|(_, item)| item).collect()
+                items.sort_by_key(|(score, haystack, _)| (-*score, haystack.clone()));
+                items.into_iter().map(|(_, _, item)| item).collect()
             }
         }
     }
@@ -197,7 +197,7 @@ mod test {
 
     #[rstest]
     #[case("", &["foo", "bar", "baz"], &["bar", "baz", "foo"])]
-    #[case("ba", &["foo", "bar", "bleh", "baz"], &["bar", "baz"])]
+    #[case("bar", &["foo", "bart", "bleh", "bars"], &["bars", "bart"])]
     #[case("bars", &["foo", "bar", "baz"], &[])]
     fn prefix_match(#[case] needle: &str, #[case] haystacks: &[&str], #[case] expected: &[&str]) {
         run_match_algorithm_test(
@@ -213,8 +213,8 @@ mod test {
     }
 
     #[rstest]
-    #[case("", &["foo", "bar", "baz"], &["foo", "bar", "baz"])]
-    #[case("ba", &["foo", "bar", "blah", "baz"], &["bar", "baz", "blah"])]
+    #[case("", &["foo", "bar", "baz"], &["bar", "baz", "foo"])]
+    #[case("bar", &["foo", "bart", "blart", "bars"], &["bars", "bart", "blart"])]
     #[case("f8l", &["String::from_utf8_lossy", "String::from_utf8", "blehf8l"], &["blehf8l", "String::from_utf8_lossy"])]
     fn fuzzy_match(#[case] needle: &str, #[case] haystacks: &[&str], #[case] expected: &[&str]) {
         run_match_algorithm_test(
