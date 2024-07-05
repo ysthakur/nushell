@@ -134,7 +134,6 @@ impl<T> NuMatcher<T> {
                     haystack.contains(&self.needle)
                 };
                 if !matches {
-                    println!("no match :( (prefix) {} {}", haystack, self.needle);
                     return false;
                 }
 
@@ -155,7 +154,6 @@ impl<T> NuMatcher<T> {
                     matcher = matcher.ignore_case();
                 }
                 let Some(score) = matcher.fuzzy_match(haystack, &self.needle) else {
-                    println!("no match :( (fuzzy) {} {}", haystack, self.needle);
                     return false;
                 };
 
