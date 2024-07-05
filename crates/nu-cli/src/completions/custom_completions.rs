@@ -7,7 +7,7 @@ use nu_protocol::{
     ast::{Argument, Call, Expr, Expression},
     debugger::WithoutDebug,
     engine::{Stack, StateWorkingSet},
-    PipelineData, Span, Type, Value,
+    CompletionSort, PipelineData, Span, Type, Value,
 };
 use std::collections::HashMap;
 
@@ -90,10 +90,6 @@ impl Completer for CustomCompletion {
                             .and_then(|val| val.as_bool().ok())
                             .unwrap_or(false);
 
-                        if should_sort {
-                            // TODO handle this later
-                        }
-
                         custom_completion_options = Some(CompletionOptions {
                             case_sensitive: options
                                 .get("case_sensitive")
@@ -110,6 +106,11 @@ impl Completer for CustomCompletion {
                                     .and_then(|option| option.try_into().ok())
                                     .unwrap_or(MatchAlgorithm::Prefix),
                                 None => completion_options.match_algorithm,
+                            },
+                            sort: if should_sort {
+                                CompletionSort::Alpha
+                            } else {
+                                CompletionSort::Default
                             },
                         });
                     }

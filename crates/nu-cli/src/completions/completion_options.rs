@@ -1,6 +1,6 @@
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use nu_parser::trim_quotes_str;
-use nu_protocol::CompletionAlgorithm;
+use nu_protocol::{CompletionAlgorithm, CompletionSort};
 use nu_utils::IgnoreCaseExt;
 use std::{borrow::Cow, fmt::Display};
 
@@ -47,6 +47,7 @@ pub struct NuMatcher<T> {
     needle: String,
     case_sensitive: bool,
     positional: bool,
+    sort: CompletionSort,
     state: State<T>,
 }
 
@@ -70,6 +71,7 @@ impl<T> NuMatcher<T> {
                     needle,
                     case_sensitive: options.case_sensitive,
                     positional: options.positional,
+                    sort: options.sort,
                     state: State::Prefix { items: Vec::new() },
                 }
             }
@@ -77,6 +79,7 @@ impl<T> NuMatcher<T> {
                 needle,
                 case_sensitive: options.case_sensitive,
                 positional: options.positional,
+                sort: options.sort,
                 state: State::Fuzzy { items: Vec::new() },
             },
         }
@@ -128,7 +131,14 @@ impl<T> NuMatcher<T> {
                 items.into_iter().map(|(_, item)| item).collect()
             }
             State::Fuzzy { mut items } => {
-                items.sort_by_key(|(score, haystack, _)| (-*score, haystack.clone()));
+                match self.sort {
+                    CompletionSort::Default => {
+                        items.sort_by_key(|(score, haystack, _)| (-*score, haystack.clone()))
+                    }
+                    CompletionSort::Alpha => {
+                        items.sort_by_key(|(_, haystack, _)| haystack.clone());
+                    }
+                }
                 items.into_iter().map(|(_, _, item)| item).collect()
             }
         }
@@ -161,6 +171,7 @@ pub struct CompletionOptions {
     pub case_sensitive: bool,
     pub positional: bool,
     pub match_algorithm: MatchAlgorithm,
+    pub sort: CompletionSort,
 }
 
 impl Default for CompletionOptions {
@@ -169,6 +180,7 @@ impl Default for CompletionOptions {
             case_sensitive: true,
             positional: true,
             match_algorithm: MatchAlgorithm::Prefix,
+            sort: Default::default(),
         }
     }
 }
@@ -204,8 +216,8 @@ mod test {
             needle,
             &CompletionOptions {
                 case_sensitive: false,
-                positional: false,
                 match_algorithm: MatchAlgorithm::Prefix,
+                ..Default::default()
             },
             haystacks,
             expected,
@@ -221,8 +233,8 @@ mod test {
             needle,
             &CompletionOptions {
                 case_sensitive: false,
-                positional: false,
                 match_algorithm: MatchAlgorithm::Fuzzy,
+                ..Default::default()
             },
             haystacks,
             expected,
@@ -242,6 +254,7 @@ mod test {
                 case_sensitive: false,
                 positional,
                 match_algorithm,
+                ..Default::default()
             },
             &["Buppercase", "blowercase"],
             &["blowercase", "Buppercase"],
