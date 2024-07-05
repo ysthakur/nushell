@@ -2,9 +2,8 @@ use crate::completions::{
     completion_common::{adjust_if_intermediate, complete_item, AdjustView},
     Completer, CompletionOptions,
 };
-use nu_ansi_term::Style;
 use nu_protocol::{
-    engine::{EngineState, Stack, StateWorkingSet},
+    engine::{Stack, StateWorkingSet},
     Span,
 };
 use reedline::Suggestion;
@@ -36,24 +35,25 @@ impl Completer for DirectoryCompletion {
 
         // Filter only the folders
         #[allow(deprecated)]
-        let items: Vec<_> = directory_completion(
+        let items: Vec<_> = complete_item(
+            true,
             span,
             &prefix,
-            &working_set.permanent_state.current_work_dir(),
+            &[&working_set.permanent_state.current_work_dir()],
             options,
             working_set.permanent_state,
             stack,
         )
         .into_iter()
-        .map(move |x| SemanticSuggestion {
+        .map(move |(span, _, value, style)| SemanticSuggestion {
             suggestion: Suggestion {
-                value: x.1,
+                value,
                 description: None,
-                style: x.2,
+                style,
                 extra: None,
                 span: reedline::Span {
-                    start: x.0.start - offset,
-                    end: x.0.end - offset,
+                    start: span.start - offset,
+                    end: span.end - offset,
                 },
                 append_whitespace: false,
             },
@@ -85,15 +85,4 @@ impl Completer for DirectoryCompletion {
 
         non_hidden
     }
-}
-
-pub fn directory_completion(
-    span: nu_protocol::Span,
-    partial: &str,
-    cwd: &str,
-    options: &CompletionOptions,
-    engine_state: &EngineState,
-    stack: &Stack,
-) -> Vec<(nu_protocol::Span, String, Option<Style>)> {
-    complete_item(true, span, partial, cwd, options, engine_state, stack)
 }

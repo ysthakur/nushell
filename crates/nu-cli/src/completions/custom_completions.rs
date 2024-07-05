@@ -1,24 +1,22 @@
 use crate::completions::{
     completer::map_value_completions, Completer, CompletionOptions, MatchAlgorithm,
-    SemanticSuggestion, SortBy,
+    SemanticSuggestion,
 };
 use nu_engine::eval_call;
 use nu_protocol::{
     ast::{Argument, Call, Expr, Expression},
     debugger::WithoutDebug,
     engine::{Stack, StateWorkingSet},
-    PipelineData, Span, Type, Value,
+    CompletionSort, PipelineData, Span, Type, Value,
 };
-use nu_utils::IgnoreCaseExt;
 use std::collections::HashMap;
 
-use super::completion_common::sort_suggestions;
+use super::completion_options::NuMatcher;
 
 pub struct CustomCompletion {
     stack: Stack,
     decl_id: usize,
     line: String,
-    sort_by: SortBy,
 }
 
 impl CustomCompletion {
@@ -27,7 +25,6 @@ impl CustomCompletion {
             stack,
             decl_id,
             line,
-            sort_by: SortBy::None,
         }
     }
 }
@@ -93,10 +90,6 @@ impl Completer for CustomCompletion {
                             .and_then(|val| val.as_bool().ok())
                             .unwrap_or(false);
 
-                        if should_sort {
-                            self.sort_by = SortBy::Ascending;
-                        }
-
                         custom_completion_options = Some(CompletionOptions {
                             case_sensitive: options
                                 .get("case_sensitive")
@@ -114,6 +107,11 @@ impl Completer for CustomCompletion {
                                     .unwrap_or(MatchAlgorithm::Prefix),
                                 None => completion_options.match_algorithm,
                             },
+                            sort: if should_sort {
+                                CompletionSort::Alpha
+                            } else {
+                                CompletionSort::Default
+                            },
                         });
                     }
 
@@ -124,42 +122,15 @@ impl Completer for CustomCompletion {
             })
             .unwrap_or_default();
 
-        let suggestions = if let Some(custom_completion_options) = custom_completion_options {
-            filter(&prefix, suggestions, &custom_completion_options)
-        } else {
-            filter(&prefix, suggestions, completion_options)
-        };
-        sort_suggestions(&String::from_utf8_lossy(&prefix), suggestions, self.sort_by)
+        let mut matcher = NuMatcher::new(
+            String::from_utf8_lossy(&prefix),
+            custom_completion_options
+                .as_ref()
+                .unwrap_or(completion_options),
+        );
+        for item in suggestions {
+            matcher.add_semantic_suggestion(item);
+        }
+        matcher.results()
     }
-}
-
-fn filter(
-    prefix: &[u8],
-    items: Vec<SemanticSuggestion>,
-    options: &CompletionOptions,
-) -> Vec<SemanticSuggestion> {
-    items
-        .into_iter()
-        .filter(|it| match options.match_algorithm {
-            MatchAlgorithm::Prefix => match (options.case_sensitive, options.positional) {
-                (true, true) => it.suggestion.value.as_bytes().starts_with(prefix),
-                (true, false) => it
-                    .suggestion
-                    .value
-                    .contains(std::str::from_utf8(prefix).unwrap_or("")),
-                (false, positional) => {
-                    let value = it.suggestion.value.to_folded_case();
-                    let prefix = std::str::from_utf8(prefix).unwrap_or("").to_folded_case();
-                    if positional {
-                        value.starts_with(&prefix)
-                    } else {
-                        value.contains(&prefix)
-                    }
-                }
-            },
-            MatchAlgorithm::Fuzzy => options
-                .match_algorithm
-                .matches_u8(it.suggestion.value.as_bytes(), prefix),
-        })
-        .collect()
 }
