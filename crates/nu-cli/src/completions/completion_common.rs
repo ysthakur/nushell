@@ -1,17 +1,17 @@
-use crate::{completions::CompletionOptions, SemanticSuggestion};
+use crate::completions::CompletionOptions;
 use nu_ansi_term::Style;
 use nu_engine::env_to_string;
 use nu_path::{expand_to_real_path, home_dir};
 use nu_protocol::{
     engine::{EngineState, Stack, StateWorkingSet},
-    levenshtein_distance, Span,
+    Span,
 };
 use nu_utils::get_ls_colors;
 use std::path::{
     is_separator, Component, Path, PathBuf, MAIN_SEPARATOR as SEP, MAIN_SEPARATOR_STR,
 };
 
-use super::{completion_options::NuMatcher, SortBy};
+use super::completion_options::NuMatcher;
 
 #[derive(Clone, Default)]
 pub struct PathBuiltFromString {

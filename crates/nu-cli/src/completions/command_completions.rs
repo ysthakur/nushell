@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    completions::{Completer, CompletionOptions, SortBy},
+    completions::{Completer, CompletionOptions},
     SuggestionKind,
 };
 use nu_parser::FlatShape;
@@ -106,7 +106,7 @@ impl CommandCompletion {
         let partial = working_set.get_span_contents(span);
         let sugg_span = reedline::Span::new(span.start - offset, span.end - offset);
 
-        let mut matcher = NuMatcher::new(String::from_utf8_lossy(&partial), options);
+        let mut matcher = NuMatcher::new(String::from_utf8_lossy(partial), options);
         let mut matched_internal = HashSet::new();
 
         let all_commands = working_set.find_commands_by_predicate(|_| true, true);
@@ -131,7 +131,7 @@ impl CommandCompletion {
         if find_externals {
             self.external_command_completion(
                 working_set,
-                sugg_span.clone(),
+                sugg_span,
                 &matched_internal,
                 &mut matcher,
             );
@@ -146,7 +146,7 @@ impl Completer for CommandCompletion {
         &mut self,
         working_set: &StateWorkingSet,
         _stack: &Stack,
-        prefix: Vec<u8>,
+        _prefix: Vec<u8>,
         span: Span,
         offset: usize,
         pos: usize,

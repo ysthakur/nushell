@@ -1,6 +1,6 @@
 use crate::completions::{
     completer::map_value_completions, Completer, CompletionOptions, MatchAlgorithm,
-    SemanticSuggestion, SortBy,
+    SemanticSuggestion,
 };
 use nu_engine::eval_call;
 use nu_protocol::{
@@ -17,7 +17,6 @@ pub struct CustomCompletion {
     stack: Stack,
     decl_id: usize,
     line: String,
-    sort_by: SortBy,
 }
 
 impl CustomCompletion {
@@ -26,7 +25,6 @@ impl CustomCompletion {
             stack,
             decl_id,
             line,
-            sort_by: SortBy::None,
         }
     }
 }
@@ -93,7 +91,7 @@ impl Completer for CustomCompletion {
                             .unwrap_or(false);
 
                         if should_sort {
-                            self.sort_by = SortBy::Ascending;
+                            // TODO handle this later
                         }
 
                         custom_completion_options = Some(CompletionOptions {
