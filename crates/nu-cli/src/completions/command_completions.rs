@@ -11,9 +11,7 @@ use nu_protocol::{
 };
 use reedline::Suggestion;
 
-use super::{
-    completion_common::sort_suggestions, completion_options::NuMatcher, SemanticSuggestion,
-};
+use super::{completion_options::NuMatcher, SemanticSuggestion};
 
 pub struct CommandCompletion {
     flattened: Vec<(Span, FlatShape)>,
@@ -185,15 +183,11 @@ impl Completer for CommandCompletion {
         };
 
         if !subcommands.is_empty() {
-            return sort_suggestions(
-                &String::from_utf8_lossy(&prefix),
-                subcommands,
-                SortBy::LevenshteinDistance,
-            );
+            return subcommands;
         }
 
         let config = working_set.get_config();
-        let commands = if matches!(self.flat_shape, nu_parser::FlatShape::External)
+        if matches!(self.flat_shape, nu_parser::FlatShape::External)
             || matches!(self.flat_shape, nu_parser::FlatShape::InternalCall(_))
             || ((span.end - span.start) == 0)
             || is_passthrough_command(working_set.delta.get_file_contents())
@@ -212,13 +206,7 @@ impl Completer for CommandCompletion {
             )
         } else {
             vec![]
-        };
-
-        sort_suggestions(
-            &String::from_utf8_lossy(&prefix),
-            commands,
-            SortBy::LevenshteinDistance,
-        )
+        }
     }
 }
 

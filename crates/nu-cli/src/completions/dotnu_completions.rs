@@ -6,10 +6,7 @@ use nu_protocol::{
 use reedline::Suggestion;
 use std::path::{is_separator, Path, MAIN_SEPARATOR as SEP, MAIN_SEPARATOR_STR};
 
-use super::{
-    completion_common::{complete_item, sort_suggestions},
-    SemanticSuggestion, SortBy,
-};
+use super::{completion_common::complete_item, SemanticSuggestion};
 
 #[derive(Clone, Default)]
 pub struct DotNuCompletion {}
@@ -90,7 +87,7 @@ impl Completer for DotNuCompletion {
 
         // Fetch the files filtering the ones that ends with .nu
         // and transform them into suggestions
-        let output: Vec<SemanticSuggestion> = complete_item(
+        complete_item(
             false,
             span,
             &partial,
@@ -128,8 +125,6 @@ impl Completer for DotNuCompletion {
             // TODO????
             kind: None,
         })
-        .collect();
-
-        sort_suggestions(&prefix_str, output, SortBy::Ascending)
+        .collect()
     }
 }
