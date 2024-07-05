@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use crate::{
-    completions::{Completer, CompletionOptions, MatchAlgorithm, SortBy},
+    completions::{Completer, CompletionOptions, SortBy},
     SuggestionKind,
 };
 use nu_parser::FlatShape;
@@ -9,7 +11,9 @@ use nu_protocol::{
 };
 use reedline::Suggestion;
 
-use super::{completion_common::sort_suggestions, SemanticSuggestion};
+use super::{
+    completion_common::sort_suggestions, completion_options::NuMatcher, SemanticSuggestion,
+};
 
 pub struct CommandCompletion {
     flattened: Vec<(Span, FlatShape)>,
@@ -33,51 +37,64 @@ impl CommandCompletion {
     fn external_command_completion(
         &self,
         working_set: &StateWorkingSet,
-        prefix: &str,
-        match_algorithm: MatchAlgorithm,
-    ) -> Vec<String> {
-        let mut executables = vec![];
+        sugg_span: reedline::Span,
+        matched_internal: &HashSet<String>,
+        matcher: &mut NuMatcher<SemanticSuggestion>,
+    ) {
+        let mut executables = HashSet::new();
 
         // os agnostic way to get the PATH env var
         let paths = working_set.permanent_state.get_path_env_var();
 
-        if let Some(paths) = paths {
-            if let Ok(paths) = paths.as_list() {
-                for path in paths {
-                    let path = path.coerce_str().unwrap_or_default();
+        let Some(paths) = paths else {
+            return;
+        };
+        let Ok(paths) = paths.as_list() else {
+            return;
+        };
+        for path in paths {
+            let path = path.coerce_str().unwrap_or_default();
 
-                    if let Ok(mut contents) = std::fs::read_dir(path.as_ref()) {
-                        while let Some(Ok(item)) = contents.next() {
-                            if working_set
-                                .permanent_state
-                                .config
-                                .max_external_completion_results
-                                > executables.len() as i64
-                                && !executables.contains(
-                                    &item
-                                        .path()
-                                        .file_name()
-                                        .map(|x| x.to_string_lossy().to_string())
-                                        .unwrap_or_default(),
-                                )
-                                && matches!(
-                                    item.path().file_name().map(|x| match_algorithm
-                                        .matches_str(&x.to_string_lossy(), prefix)),
-                                    Some(true)
-                                )
-                                && is_executable::is_executable(item.path())
-                            {
-                                if let Ok(name) = item.file_name().into_string() {
-                                    executables.push(name);
-                                }
-                            }
-                        }
+            let Ok(mut contents) = std::fs::read_dir(path.as_ref()) else {
+                continue;
+            };
+
+            while let Some(Ok(item)) = contents.next() {
+                if working_set
+                    .permanent_state
+                    .config
+                    .max_external_completion_results
+                    <= executables.len() as i64
+                {
+                    return;
+                }
+                let Ok(name) = item.file_name().into_string() else {
+                    continue;
+                };
+                if !executables.contains(&name) && is_executable::is_executable(item.path()) {
+                    let name = if matched_internal.contains(&name) {
+                        format!("^{}", name)
+                    } else {
+                        name
+                    };
+                    let added = matcher.add_semantic_suggestion(SemanticSuggestion {
+                        suggestion: Suggestion {
+                            value: name.clone(),
+                            description: None,
+                            style: None,
+                            extra: None,
+                            span: sugg_span,
+                            append_whitespace: true,
+                        },
+                        // TODO: is there a way to create a test?
+                        kind: None,
+                    });
+                    if added {
+                        executables.insert(name);
                     }
                 }
             }
         }
-
-        executables
     }
 
     fn complete_commands(
@@ -86,73 +103,43 @@ impl CommandCompletion {
         span: Span,
         offset: usize,
         find_externals: bool,
-        match_algorithm: MatchAlgorithm,
+        options: &CompletionOptions,
     ) -> Vec<SemanticSuggestion> {
         let partial = working_set.get_span_contents(span);
+        let sugg_span = reedline::Span::new(span.start - offset, span.end - offset);
 
-        let filter_predicate = |command: &[u8]| match_algorithm.matches_u8(command, partial);
+        let mut matcher = NuMatcher::new(String::from_utf8_lossy(&partial), options);
+        let mut matched_internal = HashSet::new();
 
-        let mut results = working_set
-            .find_commands_by_predicate(filter_predicate, true)
-            .into_iter()
-            .map(move |x| SemanticSuggestion {
+        let all_commands = working_set.find_commands_by_predicate(|_| true, true);
+        for (name, description, typ) in all_commands {
+            let name = String::from_utf8_lossy(&name).to_string();
+            let added = matcher.add_semantic_suggestion(SemanticSuggestion {
                 suggestion: Suggestion {
-                    value: String::from_utf8_lossy(&x.0).to_string(),
-                    description: x.1,
+                    value: name.clone(),
+                    description,
                     style: None,
                     extra: None,
-                    span: reedline::Span::new(span.start - offset, span.end - offset),
+                    span: sugg_span,
                     append_whitespace: true,
                 },
-                kind: Some(SuggestionKind::Command(x.2)),
-            })
-            .collect::<Vec<_>>();
-
-        let partial = working_set.get_span_contents(span);
-        let partial = String::from_utf8_lossy(partial).to_string();
+                kind: Some(SuggestionKind::Command(typ)),
+            });
+            if added {
+                matched_internal.insert(name);
+            }
+        }
 
         if find_externals {
-            let results_external = self
-                .external_command_completion(working_set, &partial, match_algorithm)
-                .into_iter()
-                .map(move |x| SemanticSuggestion {
-                    suggestion: Suggestion {
-                        value: x,
-                        description: None,
-                        style: None,
-                        extra: None,
-                        span: reedline::Span::new(span.start - offset, span.end - offset),
-                        append_whitespace: true,
-                    },
-                    // TODO: is there a way to create a test?
-                    kind: None,
-                });
-
-            let results_strings: Vec<String> =
-                results.iter().map(|x| x.suggestion.value.clone()).collect();
-
-            for external in results_external {
-                if results_strings.contains(&external.suggestion.value) {
-                    results.push(SemanticSuggestion {
-                        suggestion: Suggestion {
-                            value: format!("^{}", external.suggestion.value),
-                            description: None,
-                            style: None,
-                            extra: None,
-                            span: external.suggestion.span,
-                            append_whitespace: true,
-                        },
-                        kind: external.kind,
-                    })
-                } else {
-                    results.push(external)
-                }
-            }
-
-            results
-        } else {
-            results
+            self.external_command_completion(
+                working_set,
+                sugg_span.clone(),
+                &matched_internal,
+                &mut matcher,
+            );
         }
+
+        matcher.results()
     }
 }
 
@@ -191,7 +178,7 @@ impl Completer for CommandCompletion {
                 Span::new(last.0.start, pos),
                 offset,
                 false,
-                options.match_algorithm,
+                options,
             )
         } else {
             vec![]
@@ -221,7 +208,7 @@ impl Completer for CommandCompletion {
                 span,
                 offset,
                 config.enable_external_completion,
-                options.match_algorithm,
+                options,
             )
         } else {
             vec![]
