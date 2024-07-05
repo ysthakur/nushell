@@ -101,13 +101,7 @@ impl<T> NuMatcher<T> {
                     return false;
                 }
 
-                let insert_ind =
-                    match items.binary_search_by(|(other, _)| other.as_str().cmp(&haystack)) {
-                        Ok(i) => i,
-                        Err(i) => i,
-                    };
-                items.insert(insert_ind, (haystack.to_string(), item));
-
+                items.push((haystack.to_string(), item));
                 true
             }
             State::Fuzzy { items } => {
@@ -121,13 +115,7 @@ impl<T> NuMatcher<T> {
                     return false;
                 };
 
-                let insert_ind =
-                    match items.binary_search_by(|(other_score, _)| other_score.cmp(&score)) {
-                        Ok(i) => i,
-                        Err(i) => i,
-                    };
-                items.insert(insert_ind, (score, item));
-
+                items.push((score, item));
                 true
             }
         }
@@ -135,8 +123,14 @@ impl<T> NuMatcher<T> {
 
     pub fn results(self) -> Vec<T> {
         match self.state {
-            State::Prefix { items } => items.into_iter().map(|(_, item)| item).collect(),
-            State::Fuzzy { items } => items.into_iter().map(|(_, item)| item).collect(),
+            State::Prefix { mut items } => {
+                items.sort_by_key(|(haystack, _)| haystack.to_string());
+                items.into_iter().map(|(_, item)| item).collect()
+            }
+            State::Fuzzy { mut items } => {
+                items.sort_by_key(|(score, _)| -*score);
+                items.into_iter().map(|(_, item)| item).collect()
+            }
         }
     }
 }
@@ -221,7 +215,7 @@ mod test {
     #[rstest]
     #[case("", &["foo", "bar", "baz"], &["foo", "bar", "baz"])]
     #[case("ba", &["foo", "bar", "blah", "baz"], &["bar", "baz", "blah"])]
-    #[case("f8l", &["from_utf8_lossy", "String::from_utf8", "blehf8l"], &["blehf8l", "from_utf8_lossy"])]
+    #[case("f8l", &["String::from_utf8_lossy", "String::from_utf8", "blehf8l"], &["blehf8l", "String::from_utf8_lossy"])]
     fn fuzzy_match(#[case] needle: &str, #[case] haystacks: &[&str], #[case] expected: &[&str]) {
         run_match_algorithm_test(
             needle,
