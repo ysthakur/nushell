@@ -64,15 +64,15 @@ impl Completer for CustomCompletion {
                 parser_info: HashMap::new(),
             },
             PipelineData::empty(),
-        );
+        )
+        .and_then(|data| data.into_value(span));
 
         let mut custom_completion_options = None;
         let mut should_sort = true;
 
         // Parse result
-        let suggestions = result
-            .and_then(|data| data.into_value(span))
-            .map(|value| match &value {
+        let suggestions = match result {
+            Ok(value) => match &value {
                 Value::Record { val, .. } => {
                     let completions = val
                         .get("completions")
@@ -113,9 +113,19 @@ impl Completer for CustomCompletion {
                     completions
                 }
                 Value::List { vals, .. } => map_value_completions(vals.iter(), span, offset),
-                _ => vec![],
-            })
-            .unwrap_or_default();
+                val => {
+                    log::warn!(
+                        "Custom completer returned value of type {}",
+                        val.get_type().to_string()
+                    );
+                    vec![]
+                }
+            },
+            Err(e) => {
+                log::error!("Error calling custom completer: {e}");
+                vec![]
+            }
+        };
 
         let options = custom_completion_options.unwrap_or(completion_options.clone());
         let mut matcher = NuMatcher::new(String::from_utf8_lossy(prefix), options);
