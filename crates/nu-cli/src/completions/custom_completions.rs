@@ -28,6 +28,126 @@ impl CustomCompletion {
     }
 }
 
+impl CustomCompletion {
+    pub fn fetch_opt(
+        &mut self,
+        working_set: &StateWorkingSet,
+        _stack: &Stack,
+        prefix: &[u8],
+        span: Span,
+        offset: usize,
+        pos: usize,
+        completion_options: &CompletionOptions,
+    ) -> Option<Vec<SemanticSuggestion>> {
+        // Line position
+        let line_pos = pos - offset;
+
+        // Call custom declaration
+        let result = eval_call::<WithoutDebug>(
+            working_set.permanent_state,
+            &mut self.stack,
+            &Call {
+                decl_id: self.decl_id,
+                head: span,
+                arguments: vec![
+                    Argument::Positional(Expression::new_unknown(
+                        Expr::String(self.line.clone()),
+                        Span::unknown(),
+                        Type::String,
+                    )),
+                    Argument::Positional(Expression::new_unknown(
+                        Expr::Int(line_pos as i64),
+                        Span::unknown(),
+                        Type::Int,
+                    )),
+                ],
+                parser_info: HashMap::new(),
+            },
+            PipelineData::empty(),
+        )
+        .and_then(|data| data.into_value(span));
+
+        let mut custom_completion_options = None;
+        let mut should_sort = true;
+
+        // Parse result
+        let suggestions = match result {
+            Ok(value) => match value {
+                Value::Record { val, .. } => {
+                    let completions = val
+                        .get("completions")
+                        .and_then(|val| {
+                            val.as_list()
+                                .ok()
+                                .map(|it| map_value_completions(it.iter(), span, offset))
+                        })
+                        .unwrap_or_default();
+                    let options = val.get("options");
+
+                    if let Some(Value::Record { val: options, .. }) = &options {
+                        if let Some(sort) = options.get("sort").and_then(|val| val.as_bool().ok()) {
+                            should_sort = sort;
+                        }
+
+                        custom_completion_options = Some(CompletionOptions {
+                            case_sensitive: options
+                                .get("case_sensitive")
+                                .and_then(|val| val.as_bool().ok())
+                                .unwrap_or(completion_options.case_sensitive),
+                            positional: options
+                                .get("positional")
+                                .and_then(|val| val.as_bool().ok())
+                                .unwrap_or(completion_options.positional),
+                            match_algorithm: match options.get("completion_algorithm") {
+                                Some(option) => option
+                                    .coerce_string()
+                                    .ok()
+                                    .and_then(|option| option.try_into().ok())
+                                    .unwrap_or(completion_options.match_algorithm),
+                                None => completion_options.match_algorithm,
+                            },
+                            sort: completion_options.sort,
+                        });
+                    }
+
+                    completions
+                }
+                Value::List { vals, .. } => map_value_completions(vals.iter(), span, offset),
+                Value::Nothing { .. } => {
+                    return None;
+                }
+                _ => {
+                    log::error!(
+                        "Custom completer returned invalid value of type {}",
+                        value.get_type().to_string()
+                    );
+                    vec![]
+                }
+            },
+            Err(e) => {
+                log::error!("Error getting custom completions: {e}");
+                vec![]
+            }
+        };
+
+        let options = custom_completion_options.unwrap_or(completion_options.clone());
+        let mut matcher = NuMatcher::new(String::from_utf8_lossy(prefix), options);
+
+        let res = if should_sort {
+            for sugg in suggestions {
+                matcher.add_semantic_suggestion(sugg);
+            }
+            matcher.results()
+        } else {
+            suggestions
+                .into_iter()
+                .filter(|sugg| matcher.matches(&sugg.suggestion.value))
+                .collect()
+        };
+        Some(res)
+    }
+}
+
 impl Completer for CustomCompletion {
     fn fetch(
         &mut self,
@@ -93,7 +213,7 @@ impl Completer for CustomCompletion {
                             case_sensitive: options
                                 .get("case_sensitive")
                                 .and_then(|val| val.as_bool().ok())
-                                .unwrap_or(true),
+                                .unwrap_or(completion_options.case_sensitive),
                             positional: options
                                 .get("positional")
                                 .and_then(|val| val.as_bool().ok())

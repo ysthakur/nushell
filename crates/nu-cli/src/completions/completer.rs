@@ -321,14 +321,39 @@ impl NuCompleter {
                                     initial_line,
                                 );
 
-                                return self.process_completion(
-                                    &mut completer,
+                                let config = self.engine_state.get_config();
+                                let options = CompletionOptions {
+                                    case_sensitive: config.completions.case_sensitive,
+                                    match_algorithm: config.completions.algorithm.into(),
+                                    sort: config.completions.sort,
+                                    ..Default::default()
+                                };
+
+                                match completer.fetch_opt(
                                     &working_set,
+                                    &self.stack,
                                     prefix,
                                     new_span,
-                                    fake_offset,
+                                    offset,
                                     pos,
-                                );
+                                    &options,
+                                ) {
+                                    Some(suggs) => {
+                                        return suggs;
+                                    }
+                                    None => {
+                                        let mut completer = FileCompletion::new();
+                                        return completer.fetch(
+                                            &working_set,
+                                            &self.stack,
+                                            prefix,
+                                            new_span,
+                                            offset,
+                                            pos,
+                                            &options,
+                                        );
+                                    }
+                                }
                             }
                             FlatShape::Directory => {
                                 let mut completer = DirectoryCompletion::new();
