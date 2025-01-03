@@ -334,7 +334,7 @@ impl NuCompleter {
                                     &self.stack,
                                     prefix,
                                     new_span,
-                                    offset,
+                                    fake_offset,
                                     pos,
                                     &options,
                                 ) {
@@ -348,7 +348,7 @@ impl NuCompleter {
                                             &self.stack,
                                             prefix,
                                             new_span,
-                                            offset,
+                                            fake_offset,
                                             pos,
                                             &options,
                                         );
