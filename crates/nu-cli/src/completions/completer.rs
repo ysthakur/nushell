@@ -99,11 +99,11 @@ impl NuCompleter {
         );
 
         match result.and_then(|data| data.into_value(span)) {
-            Ok(Value::List { vals, .. }) => Some(map_value_completions(
-                vals.iter(),
-                Span::new(span.start, span.end),
-                offset,
-            )),
+            Ok(Value::List { vals, .. }) => {
+                let result =
+                    map_value_completions(vals.iter(), Span::new(span.start, span.end), offset);
+                Some(result)
+            }
             Ok(Value::Nothing { .. }) => None,
             Ok(value) => {
                 log::error!(
