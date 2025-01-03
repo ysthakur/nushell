@@ -238,6 +238,37 @@ fn customcompletions_no_sort(mut completer_strings_no_sort: NuCompleter) {
     match_suggestions(&expected, &suggestions);
 }
 
+/// Fallback to file completions if custom completer returns null
+#[test]
+fn customcompletions_fallback() {
+    let (_, _, mut engine, mut stack) = new_engine();
+    let command = r#"
+        def comp [] { null }
+        def my-command [arg: string@comp] {}"#;
+    assert!(support::merge_input(command.as_bytes(), &mut engine, &mut stack).is_ok());
+
+    let mut completer = NuCompleter::new(Arc::new(engine), Arc::new(stack));
+    let completion_str = "my-command test";
+    let suggestions = completer.complete(completion_str, completion_str.len());
+    let expected: Vec<String> = vec![folder("test_a"), file("test_a_symlink"), folder("test_b")];
+    match_suggestions(&expected, &suggestions);
+}
+
+/// Supress completions for invalid values
+#[test]
+fn customcompletions_invalid() {
+    let (_, _, mut engine, mut stack) = new_engine();
+    let command = r#"
+        def comp [] { 123 }
+        def my-command [arg: string@comp] {}"#;
+    assert!(support::merge_input(command.as_bytes(), &mut engine, &mut stack).is_ok());
+    let mut completer = NuCompleter::new(Arc::new(engine), Arc::new(stack));
+
+    let completion_str = "my-command foo";
+    let suggestions = completer.complete(completion_str, completion_str.len());
+    assert!(suggestions.is_empty());
+}
+
 #[test]
 fn dotnu_completions() {
     // Create a new engine

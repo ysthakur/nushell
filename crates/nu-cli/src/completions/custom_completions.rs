@@ -120,12 +120,12 @@ impl CustomCompletion {
                         "Custom completer returned invalid value of type {}",
                         value.get_type().to_string()
                     );
-                    vec![]
+                    return Some(vec![]);
                 }
             },
             Err(e) => {
                 log::error!("Error getting custom completions: {e}");
-                vec![]
+                return Some(vec![]);
             }
         };
 
