@@ -266,7 +266,14 @@ fn customcompletions_invalid() {
 
     let completion_str = "my-command foo";
     let suggestions = completer.complete(completion_str, completion_str.len());
-    assert!(suggestions.is_empty());
+    assert!(
+        suggestions.is_empty(),
+        "{:?}",
+        suggestions
+            .into_iter()
+            .map(|sugg| sugg.value)
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -345,6 +352,34 @@ fn external_completer_pass_flags() {
     assert_eq!("gh", suggestions.first().unwrap().value);
     assert_eq!("api", suggestions.get(1).unwrap().value);
     assert_eq!("--", suggestions.get(2).unwrap().value);
+}
+
+/// Fallback to file completions when external completer returns null
+#[test]
+fn external_completer_fallback() {
+    let block = "{|spans| null}";
+    let input = "foo test".to_string();
+
+    let expected = vec![folder("test_a"), file("test_a_symlink"), folder("test_b")];
+    let suggestions = run_external_completion(block, &input);
+    match_suggestions(&expected, &suggestions);
+}
+
+/// Suppress completions when external completer returns invalid value
+#[test]
+fn external_completer_invalid() {
+    let block = "{|spans| 123}";
+    let input = "foo ".to_string();
+
+    let suggestions = run_external_completion(block, &input);
+    assert!(
+        suggestions.is_empty(),
+        "{:?}",
+        suggestions
+            .into_iter()
+            .map(|sugg| sugg.value)
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
