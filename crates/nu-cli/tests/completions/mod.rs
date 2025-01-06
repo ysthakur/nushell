@@ -266,14 +266,7 @@ fn customcompletions_invalid() {
 
     let completion_str = "my-command foo";
     let suggestions = completer.complete(completion_str, completion_str.len());
-    assert!(
-        suggestions.is_empty(),
-        "{:?}",
-        suggestions
-            .into_iter()
-            .map(|sugg| sugg.value)
-            .collect::<Vec<_>>()
-    );
+    assert!(suggestions.is_empty());
 }
 
 #[test]
@@ -372,14 +365,7 @@ fn external_completer_invalid() {
     let input = "foo ".to_string();
 
     let suggestions = run_external_completion(block, &input);
-    assert!(
-        suggestions.is_empty(),
-        "{:?}",
-        suggestions
-            .into_iter()
-            .map(|sugg| sugg.value)
-            .collect::<Vec<_>>()
-    );
+    assert!(suggestions.is_empty());
 }
 
 #[test]
