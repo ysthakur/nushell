@@ -92,7 +92,7 @@ impl CustomCompletion {
                             case_sensitive: options
                                 .get("case_sensitive")
                                 .and_then(|val| val.as_bool().ok())
-                                .unwrap_or(completion_options.case_sensitive),
+                                .unwrap_or(true),
                             positional: options
                                 .get("positional")
                                 .and_then(|val| val.as_bool().ok())
