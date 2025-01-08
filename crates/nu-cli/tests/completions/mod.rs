@@ -254,7 +254,7 @@ fn customcompletions_fallback() {
     match_suggestions(&expected, &suggestions);
 }
 
-/// Supress completions for invalid values
+/// Suppress completions for invalid values
 #[test]
 fn customcompletions_invalid() {
     let (_, _, mut engine, mut stack) = new_engine();
