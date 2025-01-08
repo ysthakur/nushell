@@ -8,12 +8,13 @@ use nu_protocol::{
 };
 use std::collections::HashMap;
 
-use super::completion_options::NuMatcher;
+use super::{completion_options::NuMatcher, Completer};
 
 pub struct CustomCompletion {
     stack: Stack,
     decl_id: DeclId,
     line: String,
+    pub fallback: bool,
 }
 
 impl CustomCompletion {
@@ -22,13 +23,13 @@ impl CustomCompletion {
             stack,
             decl_id,
             line,
+            fallback: false,
         }
     }
 }
 
-impl CustomCompletion {
-    #[allow(clippy::too_many_arguments)]
-    pub fn fetch_opt(
+impl Completer for CustomCompletion {
+    fn fetch(
         &mut self,
         working_set: &StateWorkingSet,
         _stack: &Stack,
@@ -37,7 +38,7 @@ impl CustomCompletion {
         offset: usize,
         pos: usize,
         completion_options: &CompletionOptions,
-    ) -> Option<Vec<SemanticSuggestion>> {
+    ) -> Vec<SemanticSuggestion> {
         // Line position
         let line_pos = pos - offset;
 
@@ -113,26 +114,27 @@ impl CustomCompletion {
                 }
                 Value::List { vals, .. } => map_value_completions(vals.iter(), span, offset),
                 Value::Nothing { .. } => {
-                    return None;
+                    self.fallback = true;
+                    return vec![];
                 }
                 _ => {
                     log::error!(
                         "Custom completer returned invalid value of type {}",
                         value.get_type().to_string()
                     );
-                    return Some(vec![]);
+                    return vec![];
                 }
             },
             Err(e) => {
                 log::error!("Error getting custom completions: {e}");
-                return Some(vec![]);
+                return vec![];
             }
         };
 
         let options = custom_completion_options.unwrap_or(completion_options.clone());
         let mut matcher = NuMatcher::new(String::from_utf8_lossy(prefix), options);
 
-        let res = if should_sort {
+        if should_sort {
             for sugg in suggestions {
                 matcher.add_semantic_suggestion(sugg);
             }
@@ -142,7 +144,6 @@ impl CustomCompletion {
                 .into_iter()
                 .filter(|sugg| matcher.matches(&sugg.suggestion.value))
                 .collect()
-        };
-        Some(res)
+        }
     }
 }

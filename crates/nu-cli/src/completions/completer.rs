@@ -327,39 +327,28 @@ impl NuCompleter {
                                     initial_line,
                                 );
 
-                                let config = self.engine_state.get_config();
-                                let options = CompletionOptions {
-                                    case_sensitive: config.completions.case_sensitive,
-                                    match_algorithm: config.completions.algorithm.into(),
-                                    sort: config.completions.sort,
-                                    ..Default::default()
-                                };
-
-                                match completer.fetch_opt(
+                                let out = self.process_completion(
+                                    &mut completer,
                                     &working_set,
-                                    &self.stack,
                                     prefix,
                                     new_span,
                                     fake_offset,
                                     pos,
-                                    &options,
-                                ) {
-                                    Some(suggs) => {
-                                        return suggs;
-                                    }
-                                    None => {
-                                        let mut completer = FileCompletion::new();
-                                        return completer.fetch(
-                                            &working_set,
-                                            &self.stack,
-                                            prefix,
-                                            new_span,
-                                            fake_offset,
-                                            pos,
-                                            &options,
-                                        );
-                                    }
+                                );
+
+                                if !completer.fallback {
+                                    return out;
                                 }
+
+                                let mut completer = FileCompletion::new();
+                                return self.process_completion(
+                                    &mut completer,
+                                    &working_set,
+                                    prefix,
+                                    new_span,
+                                    fake_offset,
+                                    pos,
+                                );
                             }
                             FlatShape::Directory => {
                                 let mut completer = DirectoryCompletion::new();
