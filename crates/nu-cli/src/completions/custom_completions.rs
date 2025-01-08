@@ -1,4 +1,6 @@
-use crate::completions::{completer::map_value_completions, CompletionOptions, SemanticSuggestion};
+use crate::completions::{
+    completer::map_value_completions, Completer, CompletionOptions, SemanticSuggestion,
+};
 use nu_engine::eval_call;
 use nu_protocol::{
     ast::{Argument, Call, Expr, Expression},
@@ -8,7 +10,7 @@ use nu_protocol::{
 };
 use std::collections::HashMap;
 
-use super::{completion_options::NuMatcher, Completer};
+use super::completion_options::NuMatcher;
 
 pub struct CustomCompletion {
     stack: Stack,
