@@ -3,12 +3,13 @@ use nu_color_config::{color_record_to_nustyle, lookup_ansi_color_style};
 use nu_engine::{compile, eval_call};
 use nu_parser::flatten_expression;
 use nu_protocol::{
-    BlockId, DeclId, IntoSpanned, PipelineData, ShellError, Span, Spanned, SuggestionKind, Type,
-    Value, VarId,
+    BlockId, DeclId, GetSpan, IntoSpanned, PipelineData, Record, ShellError, Span, Spanned,
+    SuggestionKind, Type, Value, VarId,
     ast::{Argument, Call, Expr, Expression},
     debugger::WithoutDebug,
     engine::{Closure, EngineState, Stack, StateWorkingSet},
 };
+use nu_utils::SharedCow;
 use reedline::Suggestion;
 use std::{collections::HashMap, sync::Arc};
 
@@ -16,8 +17,8 @@ use super::completion_options::NuMatcher;
 
 fn map_value_completions<'a>(
     list: impl Iterator<Item = &'a Value>,
-    span: Span,
-    offset: usize,
+    span: reedline::Span,
+    input_start: usize,
 ) -> Vec<SemanticSuggestion> {
     list.filter_map(move |x| {
         // Match for string values
@@ -25,10 +26,7 @@ fn map_value_completions<'a>(
             return Some(SemanticSuggestion {
                 suggestion: Suggestion {
                     value: s,
-                    span: reedline::Span {
-                        start: span.start - offset,
-                        end: span.end - offset,
-                    },
+                    span,
                     ..Suggestion::default()
                 },
                 kind: Some(SuggestionKind::Value(x.get_type())),
@@ -38,11 +36,8 @@ fn map_value_completions<'a>(
         // Match for record values
         if let Ok(record) = x.as_record() {
             let mut suggestion = Suggestion {
-                value: String::from(""), // Initialize with empty string
-                span: reedline::Span {
-                    start: span.start - offset,
-                    end: span.end - offset,
-                },
+                value: String::from(""),
+                span,
                 ..Suggestion::default()
             };
             let mut value_type = Type::String;
@@ -52,21 +47,16 @@ fn map_value_completions<'a>(
                 match key.as_str() {
                     "value" => {
                         value_type = value.get_type();
-                        // Convert the value to string
                         if let Ok(val_str) = value.coerce_string() {
-                            // Update the suggestion value
                             suggestion.value = val_str;
                         }
                     }
                     "description" => {
-                        // Convert the value to string
                         if let Ok(desc_str) = value.coerce_string() {
-                            // Update the suggestion value
                             suggestion.description = Some(desc_str);
                         }
                     }
                     "style" => {
-                        // Convert the value to string
                         suggestion.style = match value {
                             Value::String { val, .. } => Some(lookup_ansi_color_style(val)),
                             Value::Record { .. } => Some(color_record_to_nustyle(value)),
@@ -74,31 +64,15 @@ fn map_value_completions<'a>(
                         };
                     }
                     "span" => {
-                        if let Value::Record { val: span, .. } = value {
-                            let start = span
-                                .get("start")
-                                .and_then(|val| val.as_int().ok())
-                                .and_then(|x| usize::try_from(x).ok());
-                            let end = span
-                                .get("end")
-                                .and_then(|val| val.as_int().ok())
-                                .and_then(|x| usize::try_from(x).ok());
+                        if let Value::Record { val: span_rec, .. } = value {
                             // TODO: error on invalid spans?
-                            match (start, end) {
-                                (Some(start), Some(end)) => {
-                                    suggestion.span = reedline::Span {
-                                        start: start.min(end),
-                                        end,
-                                    };
-                                }
-                                (Some(start), None) => {
-                                    suggestion.span.start = start.min(suggestion.span.end);
-                                }
-                                (None, Some(end)) => {
-                                    suggestion.span.end = end.max(suggestion.span.start);
-                                }
-                                _ => (),
+                            if let Some(end) = read_span_field(span_rec, "end") {
+                                suggestion.span.end = suggestion.span.end.min(end + input_start);
                             }
+                            if let Some(start) = read_span_field(span_rec, "start") {
+                                suggestion.span.start = start + input_start;
+                            }
+                            suggestion.span.start = suggestion.span.start.min(suggestion.span.end);
                         }
                     }
                     _ => (),
@@ -114,6 +88,23 @@ fn map_value_completions<'a>(
         None
     })
     .collect()
+}
+
+fn read_span_field(span: &SharedCow<Record>, field: &str) -> Option<usize> {
+    let Some(val) = span.get(field) else {
+        log::error!("Span has no {field} field");
+        return None;
+    };
+    let Ok(int_val) = val.as_int() else {
+        log::error!("Expected span field {field} to be int");
+        return None;
+    };
+    let Ok(val) = usize::try_from(int_val) else {
+        log::error!("Couldn't convert span {field} to usize");
+        return None;
+    };
+
+    Some(val)
 }
 
 pub struct CustomCompletion<T: Completer> {
@@ -188,9 +179,16 @@ impl<T: Completer> Completer for CustomCompletion<T> {
                     let completions = val
                         .get("completions")
                         .and_then(|val| {
-                            val.as_list()
-                                .ok()
-                                .map(|it| map_value_completions(it.iter(), span, offset))
+                            val.as_list().ok().map(|it| {
+                                map_value_completions(
+                                    it.iter(),
+                                    reedline::Span {
+                                        start: span.start - offset,
+                                        end: span.end - offset,
+                                    },
+                                    span.end - offset - self.line.len(),
+                                )
+                            })
                         })
                         .unwrap_or_default();
                     let options = val.get("options");
@@ -229,7 +227,14 @@ impl<T: Completer> Completer for CustomCompletion<T> {
 
                     completions
                 }
-                Value::List { vals, .. } => map_value_completions(vals.iter(), span, offset),
+                Value::List { vals, .. } => map_value_completions(
+                    vals.iter(),
+                    reedline::Span {
+                        start: span.start - offset,
+                        end: span.end - offset,
+                    },
+                    span.end - offset - self.line.len(),
+                ),
                 Value::Nothing { .. } => {
                     return self.fallback.fetch(
                         working_set,
@@ -379,7 +384,10 @@ impl<'a> Completer for CommandWideCompletion<'a> {
         )
         .map(|p| p.body);
 
-        if let Some(results) = convert_whole_command_completion_results(offset, new_span, result) {
+        let command_span = working_set.get_span(self.expression.span_id);
+        if let Some(results) =
+            convert_whole_command_completion_results(offset, new_span, result, command_span)
+        {
             results
         } else {
             self.need_fallback = true;
@@ -394,6 +402,7 @@ fn convert_whole_command_completion_results(
     offset: usize,
     span: Span,
     result: Result<PipelineData, nu_protocol::ShellError>,
+    command_span: Span,
 ) -> Option<Vec<SemanticSuggestion>> {
     let value = match result.and_then(|pipeline_data| pipeline_data.into_value(span)) {
         Ok(value) => value,
@@ -415,8 +424,11 @@ fn convert_whole_command_completion_results(
     match value {
         Value::List { vals, .. } => Some(map_value_completions(
             vals.iter(),
-            Span::new(span.start, span.end),
-            offset,
+            reedline::Span {
+                start: span.start - offset,
+                end: span.end - offset,
+            },
+            command_span.start - offset,
         )),
         Value::Nothing { .. } => None,
         _ => {
